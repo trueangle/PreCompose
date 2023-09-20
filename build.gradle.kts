@@ -34,9 +34,9 @@ allprojects {
 }
 
 extra.apply {
-    set("precomposeVersion", "1.5.0")
+    set("precomposeVersion", "1.5.1")
 
-    set("jvmTarget", "17")
+    set("jvmTarget", "11")
 
     // Android configurations
     set("android-compile", 34)
