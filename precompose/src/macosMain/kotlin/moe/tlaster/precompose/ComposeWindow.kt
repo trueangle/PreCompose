@@ -41,7 +41,9 @@ import platform.Foundation.NSMakeRect
 import platform.Foundation.NSNotification
 import platform.Foundation.NSNotificationCenter
 import platform.Foundation.NSSelectorFromString
+import platform.darwin.EMPTY
 import platform.darwin.NSObject
+/*
 
 @OptIn(ExperimentalForeignApi::class)
 internal class ComposeWindow(
@@ -194,11 +196,13 @@ internal class ComposeWindow(
         layer.layer.redrawer?.redrawImmediately()
     }
 
-    /**
+    */
+/**
      * Sets Compose content of the ComposeWindow.
      *
      * @param content Composable content of the ComposeWindow.
-     */
+     *//*
+
     fun setContent(
         content: @Composable () -> Unit,
     ) {
@@ -214,3 +218,4 @@ internal class ComposeWindow(
         layer.dispose()
     }
 }
+*/

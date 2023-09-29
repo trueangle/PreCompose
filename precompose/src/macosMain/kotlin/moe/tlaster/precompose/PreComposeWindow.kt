@@ -3,6 +3,7 @@ package moe.tlaster.precompose
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
+import androidx.compose.ui.window.Window
 import moe.tlaster.precompose.lifecycle.LifecycleOwner
 import moe.tlaster.precompose.lifecycle.LifecycleRegistry
 import moe.tlaster.precompose.lifecycle.LocalLifecycleOwner
@@ -19,12 +20,26 @@ fun PreComposeWindow(
     content: @Composable () -> Unit,
 ) {
     // Ugly workaround until Native macOS support window resize and hide title bar.
-    ComposeWindow(
-        hideTitleBar = hideTitleBar,
-        initialTitle = title,
-        onCloseRequest = onCloseRequest,
-    ).apply {
-        setContent {
+    /*  ComposeWindow(
+          hideTitleBar = hideTitleBar,
+          initialTitle = title,
+          onCloseRequest = onCloseRequest,
+      ).apply {
+          setContent {
+              val holder = remember {
+                  PreComposeWindowHolder()
+              }
+              ProvidePreComposeCompositionLocals(
+                  holder,
+              ) {
+                  content.invoke()
+              }
+          }
+      }*/
+
+    Window(
+        title = title,
+        content = {
             val holder = remember {
                 PreComposeWindowHolder()
             }
@@ -34,7 +49,7 @@ fun PreComposeWindow(
                 content.invoke()
             }
         }
-    }
+    )
 }
 
 @Composable

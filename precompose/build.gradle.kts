@@ -164,7 +164,7 @@ publishing {
                 val releasesRepoUrl =
                     "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
                 val snapshotsRepoUrl =
-                    "https://s01.oss.sonatype.org/content/repositories/snapshots/"
+                    "https://s01.oss.sonatype.org/content/publish.properties/snapshots/"
                 url = if (version.toString().endsWith("SNAPSHOT")) {
                     uri(snapshotsRepoUrl)
                 } else {

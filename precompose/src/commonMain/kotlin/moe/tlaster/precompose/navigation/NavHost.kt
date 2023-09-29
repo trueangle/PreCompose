@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalComposeUiApi::class)
+
 package moe.tlaster.precompose.navigation
 
 import androidx.compose.animation.AnimatedContent
@@ -33,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.SaveableStateHolder
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.graphicsLayer
@@ -43,6 +46,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
 import moe.tlaster.precompose.lifecycle.LocalLifecycleOwner
 import moe.tlaster.precompose.navigation.route.ComposeRoute
@@ -101,13 +106,15 @@ fun NavHost(
             if (navigator.stackManager.contains(initialState)) targetState else initialState
         }.navTransition ?: navTransition
         if (!navigator.stackManager.contains(initialState)) {
-            actualTransaction.resumeTransition.togetherWith(actualTransaction.destroyTransition).apply {
-                targetContentZIndex = actualTransaction.enterTargetContentZIndex
-            }
+            actualTransaction.resumeTransition.togetherWith(actualTransaction.destroyTransition)
+                .apply {
+                    targetContentZIndex = actualTransaction.enterTargetContentZIndex
+                }
         } else {
-            actualTransaction.createTransition.togetherWith(actualTransaction.pauseTransition).apply {
-                targetContentZIndex = actualTransaction.exitTargetContentZIndex
-            }
+            actualTransaction.createTransition.togetherWith(actualTransaction.pauseTransition)
+                .apply {
+                    targetContentZIndex = actualTransaction.exitTargetContentZIndex
+                }
         }
     }
 
@@ -211,11 +218,27 @@ fun NavHost(
             }
         }
 
-        val currentFloatingEntry by navigator.stackManager.currentFloatingBackStackEntry.collectAsState(null)
-        currentFloatingEntry?.let {
-            AnimatedContent(it, transitionSpec = transitionSpec) { entry ->
-                NavHostContent(composeStateHolder, entry)
+        val currentFloatingEntry by navigator.stackManager.currentFloatingBackStackEntry.collectAsState(
+            null
+        )
+        currentFloatingEntry?.let { sceneEntry ->
+            PreComposeDialog(
+                onDismissRequest = {
+                    //navigator.goBack()
+                },
+                // temporary combination of flags, for android target workaround
+                properties = dialogProperties(
+                    usePlatformDefaultWidth = true,
+                    usePlatformInsets = false
+                )
+            ) {
+                AnimatedContent(sceneEntry, transitionSpec = transitionSpec) { entry ->
+                    NavHostContent(composeStateHolder, entry)
+                }
             }
+            /*AnimatedContent(it, transitionSpec = transitionSpec) { entry ->
+                NavHostContent(composeStateHolder, entry)
+            }*/
         }
     }
 }
@@ -244,9 +267,9 @@ private fun SwipeItem(
                     translationX =
                         swipeProperties.slideInHorizontally(size.width.toInt())
                             .toFloat() -
-                        swipeProperties.slideInHorizontally(
-                            dismissState.offset.value.absoluteValue.toInt(),
-                        )
+                            swipeProperties.slideInHorizontally(
+                                dismissState.offset.value.absoluteValue.toInt(),
+                            )
                 }?.drawWithContent {
                     drawContent()
                     drawRect(
@@ -345,7 +368,7 @@ private fun CustomSwipeToDismiss(
             .offset { IntOffset(x = -shift, 0) }
             .graphicsLayer { translationX = state.offset.value },
 
-    ) {
+        ) {
         dismissContent()
     }
 }
