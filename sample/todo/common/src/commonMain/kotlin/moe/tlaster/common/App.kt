@@ -67,18 +67,8 @@ fun App() {
                         },
                     )
                 }
-                scene("/detail/{id:[0-9]+}") { backStackEntry ->
-                    backStackEntry.path<Int>("id")?.let {
-                        NoteDetailScene(
-                            id = it,
-                            onEdit = {
-                                navigator.navigate("/edit/$it")
-                            },
-                            onBack = {
-                                navigator.goBack()
-                            },
-                        )
-                    }
+                dialog("/detail/{id:[0-9]+}") { _ ->
+                    FlowInsideDialog()
                 }
                 scene(
                     "/edit/{id:[0-9]+}?",
@@ -102,6 +92,64 @@ fun App() {
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+@OptIn(ExperimentalMaterialApi::class)
+fun FlowInsideDialog() {
+    val navigator = rememberNavigator()
+    NavHost(
+        navigator = navigator,
+        initialRoute = "/home",
+    ) {
+        scene("/home") {
+            NoteListScene(
+                onItemClicked = {
+                    navigator.navigate("/detail/${it.id}")
+                },
+                onAddClicked = {
+                    navigator.navigate("/edit")
+                },
+                onEditClicked = {
+                    navigator.navigate("/edit/${it.id}")
+                },
+            )
+        }
+        scene("/detail/{id:[0-9]+}") { backStackEntry ->
+            backStackEntry.path<Int>("id")?.let {
+                NoteDetailScene(
+                    id = it,
+                    onEdit = {
+                        navigator.navigate("/edit/$it")
+                    },
+                    onBack = {
+                        navigator.goBack()
+                    },
+                )
+            }
+        }
+        scene(
+            "/edit/{id:[0-9]+}?",
+            navTransition = NavTransition(
+                createTransition = slideInVertically(initialOffsetY = { it }),
+                destroyTransition = slideOutVertically(targetOffsetY = { it }),
+                pauseTransition = scaleOut(targetScale = 0.9f),
+                resumeTransition = scaleIn(initialScale = 0.9f),
+                exitTargetContentZIndex = 1f,
+            ),
+        ) { backStackEntry ->
+            val id = backStackEntry.path<Int>("id")
+            NoteEditScene(
+                id = id,
+                onDone = {
+                    navigator.goBack()
+                },
+                onBack = {
+                    navigator.goBack()
+                },
+            )
         }
     }
 }

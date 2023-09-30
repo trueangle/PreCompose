@@ -12,7 +12,7 @@ import androidx.compose.ui.window.DialogProperties
 internal expect fun dialogProperties(
     usePlatformDefaultWidth: Boolean = false,
     usePlatformInsets: Boolean = false,
-    dismissOnBackPress: Boolean = true,
+    dismissOnBackPress: Boolean = false,
     dismissOnClickOutside: Boolean = true,
 ): DialogProperties
 

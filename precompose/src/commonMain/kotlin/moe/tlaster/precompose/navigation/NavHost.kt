@@ -46,8 +46,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
 import moe.tlaster.precompose.lifecycle.LocalLifecycleOwner
 import moe.tlaster.precompose.navigation.route.ComposeRoute
@@ -55,6 +53,7 @@ import moe.tlaster.precompose.navigation.route.GroupRoute
 import moe.tlaster.precompose.navigation.transition.NavTransition
 import moe.tlaster.precompose.stateholder.LocalSavedStateHolder
 import moe.tlaster.precompose.stateholder.LocalStateHolder
+import moe.tlaster.precompose.ui.LocalBackDispatcherOwner
 import kotlin.math.absoluteValue
 import kotlin.math.roundToInt
 
@@ -222,13 +221,26 @@ fun NavHost(
             null
         )
         currentFloatingEntry?.let { sceneEntry ->
+
+            val backDispatcher = requireNotNull(LocalBackDispatcherOwner.current).backDispatcher
+            val canHandleBackPress by backDispatcher.canHandleBackPress.collectAsState(false)
+
             PreComposeDialog(
+                // this won't be called on iOS since back navigation and currentFloatingEntry destroy happens earlier
+                // than the callback is called
+
+                // This method is suitable for Android since system's dialog window intercepts all the user input events
+                // preventing root LocalBackDispatcherOwner.backDispatcher.onBackPress to be called
                 onDismissRequest = {
-                    //navigator.goBack()
+                    if (canHandleBackPress) {
+                        backDispatcher.onBackPress()
+                    } else {
+                        navigator.goBack()
+                    }
                 },
                 // temporary combination of flags, for android target workaround
                 properties = dialogProperties(
-                    usePlatformDefaultWidth = true,
+                    usePlatformDefaultWidth = false,
                     usePlatformInsets = false
                 )
             ) {
@@ -236,9 +248,6 @@ fun NavHost(
                     NavHostContent(composeStateHolder, entry)
                 }
             }
-            /*AnimatedContent(it, transitionSpec = transitionSpec) { entry ->
-                NavHostContent(composeStateHolder, entry)
-            }*/
         }
     }
 }
