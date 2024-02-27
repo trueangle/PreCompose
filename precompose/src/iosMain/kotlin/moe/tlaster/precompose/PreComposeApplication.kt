@@ -6,8 +6,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.SaveableStateRegistry
 import androidx.compose.ui.uikit.ComposeUIViewControllerConfiguration
 import kotlinx.cinterop.BetaInteropApi
-import androidx.compose.ui.window.ComposeUIViewController
-import kotlinx.cinterop.BetaInteropApi
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.ObjCAction
 import moe.tlaster.precompose.lifecycle.Lifecycle
@@ -52,6 +50,15 @@ fun ProvidePreComposeCompositionLocals(
         LocalBackDispatcherOwner provides holder,
         LocalSavedStateHolder provides holder.savedStateHolder,
     ) {
+        content.invoke()
+    }
+}
+
+@Composable
+actual fun PreComposeApp(
+    content: @Composable () -> Unit,
+) {
+    ProvidePreComposeCompositionLocals {
         content.invoke()
     }
 }
