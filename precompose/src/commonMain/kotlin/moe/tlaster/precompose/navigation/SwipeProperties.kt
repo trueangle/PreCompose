@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalMaterialApi::class)
+@file:Suppress("DEPRECATION")
 
 package moe.tlaster.precompose.navigation
 
@@ -23,7 +23,8 @@ import moe.tlaster.precompose.navigation.transition.NavTransition
  * @param shadowColor color of the shadow. Alpha channel is additionally multiplied
  * by swipe progress. Use [Color.Transparent] to disable shadow
  * */
-class SwipeProperties(
+@OptIn(ExperimentalMaterialApi::class)
+class SwipeProperties constructor(
     val slideInHorizontally: (fullWidth: Int) -> Int = { -it / 4 },
     val spaceToSwipe: Dp = 10.dp,
     val swipeThreshold: ThresholdConfig = FixedThreshold(56.dp),

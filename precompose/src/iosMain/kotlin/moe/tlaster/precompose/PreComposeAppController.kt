@@ -22,11 +22,6 @@ import platform.objc.sel_registerName
 
 private const val PRECOMPOSE_ACTIVITY_TYPE = "moe.tlaster.precompose.state.activity"
 
-/**
-* Developers should call didBecomeActive, willBecomeInactive, didBecomeDestroyed events manually
-* while using the controller directly in order to support correct Lifecycle events handle and state restoration
-* example: {@see sample PrecomposeSceneDelegate.kt}
- */
 @OptIn(ExperimentalForeignApi::class)
 @kotlinx.cinterop.BetaInteropApi
 @ExportObjCClass
@@ -66,7 +61,6 @@ class PreComposeAppController(
 
         view.addGestureRecognizer(leftSwipeRecognizer)
 
-        windowHolder.lifecycle.currentState = Lifecycle.State.Active
         val composeVC = ComposeUIViewController(configure) {
             ProvidePreComposeCompositionLocals(
                 windowHolder,
@@ -85,13 +79,6 @@ class PreComposeAppController(
         composeVC.didMoveToParentViewController(this)
     }
 
-    fun didBecomeActive() {
-        // Active state has already been set upon viewDidLoad, so avoid events duplication
-        if (windowHolder.lifecycle.currentState != Lifecycle.State.Active) {
-            windowHolder.lifecycle.currentState = Lifecycle.State.Active
-        }
-    }
-
     override fun viewWillDisappear(animated: Boolean) {
         super.viewWillDisappear(animated)
         val windowScene = view.window?.windowScene
@@ -108,8 +95,6 @@ class PreComposeAppController(
     }
 
     fun willBecomeInactive(): NSUserActivity {
-        windowHolder.lifecycle.currentState = Lifecycle.State.InActive
-
         val activity = NSUserActivity(PRECOMPOSE_ACTIVITY_TYPE).apply {
             title = "PreCompose scene restoration activity"
         }
@@ -119,9 +104,5 @@ class PreComposeAppController(
         NSLog("saved $saved")
 
         return activity
-    }
-
-    fun didBecomeDestroyed() {
-        windowHolder.lifecycle.currentState = Lifecycle.State.Destroyed
     }
 }

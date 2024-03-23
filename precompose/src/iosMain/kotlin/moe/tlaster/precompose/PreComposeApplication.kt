@@ -3,8 +3,8 @@ package moe.tlaster.precompose
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.SaveableStateRegistry
 import androidx.compose.ui.uikit.ComposeUIViewControllerConfiguration
-import androidx.compose.ui.window.ComposeUIViewController
 import kotlinx.cinterop.BetaInteropApi
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.ObjCAction
@@ -12,11 +12,14 @@ import moe.tlaster.precompose.lifecycle.Lifecycle
 import moe.tlaster.precompose.lifecycle.LifecycleOwner
 import moe.tlaster.precompose.lifecycle.LifecycleRegistry
 import moe.tlaster.precompose.lifecycle.LocalLifecycleOwner
+import moe.tlaster.precompose.stateholder.LocalSavedStateHolder
 import moe.tlaster.precompose.stateholder.LocalStateHolder
+import moe.tlaster.precompose.stateholder.SavedStateHolder
 import moe.tlaster.precompose.stateholder.StateHolder
 import moe.tlaster.precompose.ui.BackDispatcher
 import moe.tlaster.precompose.ui.BackDispatcherOwner
 import moe.tlaster.precompose.ui.LocalBackDispatcherOwner
+import platform.Foundation.NSUserActivity
 import platform.Foundation.NSNotification
 import platform.Foundation.NSNotificationCenter
 import platform.Foundation.NSSelectorFromString
@@ -26,34 +29,12 @@ import platform.UIKit.UIApplicationWillTerminateNotification
 import platform.UIKit.UIViewController
 import platform.darwin.NSObject
 
-@Suppress("FunctionName")
-@Deprecated(
-    message = """
-        Use ComposeUIViewController directly instead. And make sure wrap your content with PreComposeApp.
-        PreComposeApplication will be removed in the future release.
-        For migration guide, please refer to https://github.com/Tlaster/PreCompose/releases/tag/1.5.5
-    """,
-    replaceWith = ReplaceWith("ComposeUIViewController"),
-)
-fun PreComposeApplication(
+@OptIn(BetaInteropApi::class)
+fun PreComposeApp(
     configure: ComposeUIViewControllerConfiguration.() -> Unit = {},
+    nsUserActivity: NSUserActivity? = null,
     content: @Composable () -> Unit,
-): UIViewController {
-    return ComposeUIViewController(configure) {
-        PreComposeApp {
-            content.invoke()
-        }
-    }
-}
-
-@Composable
-actual fun PreComposeApp(
-    content: @Composable () -> Unit,
-) {
-    ProvidePreComposeCompositionLocals {
-        content.invoke()
-    }
-}
+): UIViewController = PreComposeAppController(configure, nsUserActivity, content)
 
 @Composable
 fun ProvidePreComposeCompositionLocals(
@@ -66,7 +47,17 @@ fun ProvidePreComposeCompositionLocals(
         LocalLifecycleOwner provides holder,
         LocalStateHolder provides holder.stateHolder,
         LocalBackDispatcherOwner provides holder,
+        LocalSavedStateHolder provides holder.savedStateHolder,
     ) {
+        content.invoke()
+    }
+}
+
+@Composable
+actual fun PreComposeApp(
+    content: @Composable () -> Unit,
+) {
+    ProvidePreComposeCompositionLocals {
         content.invoke()
     }
 }
@@ -116,13 +107,24 @@ private class AppStateHolder(
     }
 }
 
-class PreComposeWindowHolder : LifecycleOwner, BackDispatcherOwner {
+class PreComposeWindowHolder(
+    restored: Map<String, List<Any?>>? = null
+) : LifecycleOwner, BackDispatcherOwner {
     override val lifecycle by lazy {
         LifecycleRegistry()
     }
+
     val stateHolder by lazy {
         StateHolder()
     }
+
+    val saveableStateRegistry = SaveableStateRegistry(restored) { true }
+
+    val savedStateHolder = SavedStateHolder(
+        "root",
+        saveableStateRegistry,
+    )
+
     override val backDispatcher by lazy {
         BackDispatcher()
     }
