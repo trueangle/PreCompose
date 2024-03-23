@@ -12,15 +12,15 @@ import moe.tlaster.precompose.stateholder.StateHolder
 
 class BackStackEntry internal constructor(
     val id: Long,
-    val route: Route,
+    internal var routeInternal: Route,
     val path: String,
     val pathMap: Map<String, String>,
     private val parentStateHolder: StateHolder,
     parentSavedStateHolder: SavedStateHolder,
     val queryString: QueryString? = null,
-    // TODO: dirty callback for disabling push back -> immediate navigate
-    private val requestNavigationLock: (locked: Boolean) -> Unit = {},
 ) : LifecycleOwner {
+    val route: Route
+        get() = routeInternal
     internal var uiClosable: UiClosable? = null
     private var _destroyAfterTransition = false
     internal val stateId = "$id-${route.route}"
@@ -42,11 +42,11 @@ class BackStackEntry internal constructor(
         get() = lifecycleRegistry
 
     fun active() {
-        lifecycleRegistry.currentState = Lifecycle.State.Active
+        lifecycleRegistry.updateState(Lifecycle.State.Active)
     }
 
     fun inActive() {
-        lifecycleRegistry.currentState = Lifecycle.State.InActive
+        lifecycleRegistry.updateState(Lifecycle.State.InActive)
         if (_destroyAfterTransition) {
             destroy()
         }
@@ -55,19 +55,21 @@ class BackStackEntry internal constructor(
     fun destroy() {
         if (lifecycleRegistry.currentState != Lifecycle.State.InActive) {
             _destroyAfterTransition = true
-            requestNavigationLock.invoke(true)
         } else {
-            lifecycleRegistry.currentState = Lifecycle.State.Destroyed
-            stateHolder.close()
-            parentStateHolder.remove(stateId)
-            savedStateHolder.close()
-            uiClosable?.close(stateId)
-            requestNavigationLock.invoke(false)
+            destroyDirectly()
         }
     }
 
+    internal fun destroyDirectly() {
+        lifecycleRegistry.updateState(Lifecycle.State.Destroyed)
+        stateHolder.close()
+        parentStateHolder.remove(stateId)
+        savedStateHolder.close()
+        uiClosable?.close(stateId)
+    }
+
     fun hasRoute(route: String): Boolean {
-        return this.route.route == route || this.route is GroupRoute && this.route.hasRoute(route)
+        return this.route.route == route || (this.route as? GroupRoute)?.hasRoute(route) == true
     }
 }
 

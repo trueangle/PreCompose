@@ -12,7 +12,7 @@ group = "moe.tlaster"
 version = rootProject.extra.get("precomposeVersion") as String
 
 kotlin {
-    targetHierarchy.default {
+    applyDefaultHierarchyTemplate {
         common {
             group("jvmAndroid") {
                 withAndroidTarget()
@@ -44,7 +44,7 @@ kotlin {
         val commonMain by getting {
             dependencies {
                 compileOnly(compose.foundation)
-                compileOnly(project(":precompose"))
+                implementation(project(":precompose"))
             }
         }
         val commonTest by getting {

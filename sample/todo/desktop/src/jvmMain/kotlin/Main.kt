@@ -1,13 +1,16 @@
 
-import androidx.compose.material.ExperimentalMaterialApi
+import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import moe.tlaster.common.App
-import moe.tlaster.precompose.PreComposeWindow
+import moe.tlaster.common.di.AppModule
+import org.koin.core.context.startKoin
 
-@OptIn(ExperimentalMaterialApi::class)
 fun main() {
+    startKoin {
+        modules(AppModule.appModule)
+    }
     application {
-        PreComposeWindow(
+        Window(
             title = "PreCompose Sample",
             onCloseRequest = {
                 exitApplication()

@@ -1,6 +1,6 @@
 # PreCompose
 [![Maven Central](https://maven-badges.herokuapp.com/maven-central/moe.tlaster/precompose/badge.svg)](https://maven-badges.herokuapp.com/maven-central/moe.tlaster/precompose)
-[![compose-jb-version](https://img.shields.io/badge/compose--jb-1.5.0-blue)](https://github.com/JetBrains/compose-jb)
+[![compose-jb-version](https://img.shields.io/badge/compose--jb-1.5.10-blue)](https://github.com/JetBrains/compose-jb)
 ![license](https://img.shields.io/github/license/Tlaster/PreCompose)
 
 ![badge-Android](https://img.shields.io/badge/Platform-Android-brightgreen)
@@ -9,7 +9,7 @@
 ![badge-macOS](https://img.shields.io/badge/Platform-macOS-purple)
 ![badge-web](https://img.shields.io/badge/Platform-Web-blue)
 
-Compose Multiplatform Navigation && ViewModel, inspired by Jetpack Lifecycle, ViewModel, LiveData and Navigation, PreCompose provides similar (or even the same) components for you but in Kotlin, and it's Kotlin Multiplatform project.
+Compose Multiplatform Navigation && ViewModel, inspired by Jetpack Navigation, ViewModel and Lifecycle, PreCompose provides similar (or even the same) components for you but in Kotlin, and it's Kotlin Multiplatform project.
 
 # Why PreCompose
  - Write your business logic and UI code once in one `commonMain`, and your application can be anywhere, powered by Kotlin and Compose!
@@ -34,7 +34,7 @@ Compose Multiplatform Navigation && ViewModel, inspired by Jetpack Lifecycle, Vi
 
 # Credits
 
-Thanks Jetbrains for [supporting open source software](https://www.jetbrains.com/community/opensource/#support)
+Thanks JetBrains for [supporting open source software](https://www.jetbrains.com/community/opensource/#support)
 
 <a href="https://www.jetbrains.com/community/opensource/#support">
   <img src="https://resources.jetbrains.com/storage/products/company/brand/logos/jb_beam.png" alt="JetBrains Logo (Main) logo." width="200" />

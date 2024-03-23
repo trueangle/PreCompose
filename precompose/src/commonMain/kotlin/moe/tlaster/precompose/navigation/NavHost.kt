@@ -24,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -45,11 +46,14 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import moe.tlaster.precompose.lifecycle.LocalLifecycleOwner
+import moe.tlaster.precompose.lifecycle.currentLocalLifecycleOwner
 import moe.tlaster.precompose.navigation.route.ComposeRoute
 import moe.tlaster.precompose.navigation.route.GroupRoute
 import moe.tlaster.precompose.navigation.transition.NavTransition
 import moe.tlaster.precompose.stateholder.LocalSavedStateHolder
 import moe.tlaster.precompose.stateholder.LocalStateHolder
+import moe.tlaster.precompose.stateholder.currentLocalSavedStateHolder
+import moe.tlaster.precompose.stateholder.currentLocalStateHolder
 import kotlin.math.absoluteValue
 import kotlin.math.roundToInt
 
@@ -66,33 +70,35 @@ import kotlin.math.roundToInt
  * @param initialRoute the route for the start destination
  * @param navTransition navigation transition for the scenes in this [NavHost]
  * @param swipeProperties properties of swipe back navigation
- * @param persistNavState whether to persist navigation state to the Saved State Registry, defaults to false
  * @param builder the builder used to construct the graph
  */
 @OptIn(ExperimentalAnimationApi::class, ExperimentalMaterialApi::class)
 @Composable
 fun NavHost(
-    modifier: Modifier = Modifier,
     navigator: Navigator,
     initialRoute: String,
+    modifier: Modifier = Modifier,
     navTransition: NavTransition = remember { NavTransition() },
     swipeProperties: SwipeProperties? = null,
-    persistNavState: Boolean = false,
     builder: RouteBuilder.() -> Unit,
 ) {
-    val lifecycleOwner = requireNotNull(LocalLifecycleOwner.current)
-    val stateHolder = requireNotNull(LocalStateHolder.current)
-    val savedStateHolder = requireNotNull(LocalSavedStateHolder.current)
+    val lifecycleOwner = currentLocalLifecycleOwner
+    val stateHolder = currentLocalStateHolder
+    val savedStateHolder = currentLocalSavedStateHolder
     val composeStateHolder = rememberSaveableStateHolder()
 
     // true for assuming that lifecycleOwner, stateHolder and composeStateHolder are not changing during the lifetime of the NavHost
     LaunchedEffect(true) {
         navigator.init(
-            routeGraph = RouteBuilder(initialRoute).apply(builder).build(),
             stateHolder = stateHolder,
             savedStateHolder = savedStateHolder,
             lifecycleOwner = lifecycleOwner,
-            persistNavState = persistNavState,
+        )
+    }
+
+    LaunchedEffect(builder, initialRoute) {
+        navigator.setRouteGraph(
+            RouteBuilder(initialRoute).apply(builder).build(),
         )
     }
 
@@ -101,13 +107,15 @@ fun NavHost(
             if (navigator.stackManager.contains(initialState)) targetState else initialState
         }.navTransition ?: navTransition
         if (!navigator.stackManager.contains(initialState)) {
-            actualTransaction.resumeTransition.togetherWith(actualTransaction.destroyTransition).apply {
-                targetContentZIndex = actualTransaction.enterTargetContentZIndex
-            }
+            actualTransaction.resumeTransition.togetherWith(actualTransaction.destroyTransition)
+                .apply {
+                    targetContentZIndex = actualTransaction.enterTargetContentZIndex
+                }
         } else {
-            actualTransaction.createTransition.togetherWith(actualTransaction.pauseTransition).apply {
-                targetContentZIndex = actualTransaction.exitTargetContentZIndex
-            }
+            actualTransaction.createTransition.togetherWith(actualTransaction.pauseTransition)
+                .apply {
+                    targetContentZIndex = actualTransaction.exitTargetContentZIndex
+                }
         }
     }
 
@@ -140,6 +148,9 @@ fun NavHost(
             val actualSwipeProperties = sceneEntry.swipeProperties ?: swipeProperties
             if (actualSwipeProperties == null) {
                 AnimatedContent(sceneEntry, transitionSpec = transitionSpec) { entry ->
+                    SideEffect {
+                        navigator.stackManager.canNavigate = !transition.isRunning
+                    }
                     NavHostContent(composeStateHolder, entry)
                 }
             } else {
@@ -155,8 +166,12 @@ fun NavHost(
                     rememberDismissState()
                 }
 
-                LaunchedEffect(dismissState.isDismissed(DismissDirection.StartToEnd)) {
-                    if (dismissState.isDismissed(DismissDirection.StartToEnd)) {
+                LaunchedEffect(
+                    dismissState.isDismissed(DismissDirection.StartToEnd),
+                    dismissState.isAnimationRunning,
+                ) {
+                    navigator.stackManager.canNavigate = !dismissState.isAnimationRunning
+                    if (dismissState.isDismissed(DismissDirection.StartToEnd) && !dismissState.isAnimationRunning) {
                         prevWasSwiped = true
                         navigator.goBack()
                     }
@@ -198,11 +213,15 @@ fun NavHost(
                             },
                         ),
                     ) {
+                        SideEffect {
+                            navigator.stackManager.canNavigate = !transition.isRunning
+                        }
                         SwipeItem(
                             dismissState = dismissState,
                             swipeProperties = actualSwipeProperties,
                             isPrev = isPrev,
                             isLast = !canGoBack,
+                            enabled = !transition.isRunning,
                         ) {
                             NavHostContent(composeStateHolder, it)
                         }
@@ -210,10 +229,13 @@ fun NavHost(
                 }
             }
         }
-
-        val currentFloatingEntry by navigator.stackManager.currentFloatingBackStackEntry.collectAsState(null)
+        val currentFloatingEntry by navigator.stackManager
+            .currentFloatingBackStackEntry.collectAsState(null)
         currentFloatingEntry?.let {
             AnimatedContent(it, transitionSpec = transitionSpec) { entry ->
+                SideEffect {
+                    navigator.stackManager.canNavigate = !transition.isRunning
+                }
                 NavHostContent(composeStateHolder, entry)
             }
         }
@@ -227,39 +249,44 @@ private fun SwipeItem(
     swipeProperties: SwipeProperties,
     isPrev: Boolean,
     isLast: Boolean,
+    enabled: Boolean,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
-    CustomSwipeToDismiss(
-        state = if (isPrev) rememberDismissState() else dismissState,
-        spaceToSwipe = swipeProperties.spaceToSwipe,
-        enabled = !isLast,
-        dismissThreshold = swipeProperties.swipeThreshold,
-        modifier = modifier,
-    ) {
-        Box(
-            modifier = Modifier
-                .takeIf { isPrev }
-                ?.graphicsLayer {
-                    translationX =
-                        swipeProperties.slideInHorizontally(size.width.toInt())
-                            .toFloat() -
-                        swipeProperties.slideInHorizontally(
-                            dismissState.offset.value.absoluteValue.toInt(),
-                        )
-                }?.drawWithContent {
-                    drawContent()
-                    drawRect(
-                        swipeProperties.shadowColor,
-                        alpha = (1f - dismissState.progress.fraction) *
-                            swipeProperties.shadowColor.alpha,
-                    )
-                }?.pointerInput(0) {
-                    // prev entry should not be interactive until fully appeared
-                } ?: Modifier,
+    if (enabled) {
+        CustomSwipeToDismiss(
+            state = if (isPrev) rememberDismissState() else dismissState,
+            spaceToSwipe = swipeProperties.spaceToSwipe,
+            enabled = !isLast,
+            dismissThreshold = swipeProperties.swipeThreshold,
+            modifier = modifier,
         ) {
-            content.invoke()
+            Box(
+                modifier = Modifier
+                    .takeIf { isPrev }
+                    ?.graphicsLayer {
+                        translationX =
+                            swipeProperties.slideInHorizontally(size.width.toInt())
+                                .toFloat() -
+                            swipeProperties.slideInHorizontally(
+                                dismissState.offset.value.absoluteValue.toInt(),
+                            )
+                    }?.drawWithContent {
+                        drawContent()
+                        drawRect(
+                            swipeProperties.shadowColor,
+                            alpha = (1f - dismissState.progress.fraction) *
+                                swipeProperties.shadowColor.alpha,
+                        )
+                    }?.pointerInput(0) {
+                        // prev entry should not be interactive until fully appeared
+                    } ?: Modifier,
+            ) {
+                content.invoke()
+            }
         }
+    } else {
+        content.invoke()
     }
 }
 
@@ -268,12 +295,6 @@ private fun NavHostContent(
     stateHolder: SaveableStateHolder,
     entry: BackStackEntry,
 ) {
-    DisposableEffect(entry) {
-        entry.active()
-        onDispose {
-            entry.inActive()
-        }
-    }
     stateHolder.SaveableStateProvider(entry.stateId) {
         CompositionLocalProvider(
             LocalStateHolder provides entry.stateHolder,
@@ -283,6 +304,12 @@ private fun NavHostContent(
                 entry.ComposeContent()
             },
         )
+    }
+    DisposableEffect(entry) {
+        entry.active()
+        onDispose {
+            entry.inActive()
+        }
     }
 }
 
@@ -297,7 +324,7 @@ private fun GroupRoute.composeRoute(): ComposeRoute? {
 @Composable
 private fun BackStackEntry.ComposeContent() {
     if (route is GroupRoute) {
-        route.composeRoute()
+        (route as GroupRoute).composeRoute()
     } else {
         route as? ComposeRoute
     }?.content?.invoke(this)

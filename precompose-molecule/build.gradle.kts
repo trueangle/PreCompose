@@ -12,6 +12,7 @@ group = "moe.tlaster"
 version = rootProject.extra.get("precomposeVersion") as String
 
 kotlin {
+    applyDefaultHierarchyTemplate()
     androidTarget {
         publishLibraryVariants("release", "debug")
     }
@@ -36,7 +37,7 @@ kotlin {
         val commonMain by getting {
             dependencies {
                 compileOnly(compose.foundation)
-                compileOnly(project(":precompose"))
+                implementation(project(":precompose"))
                 compileOnly(libs.molecule.runtime)
             }
         }
@@ -82,32 +83,17 @@ kotlin {
                 implementation(kotlin("test-js"))
             }
         }
-        val macosMain by creating {
+        val macosMain by getting {
             dependsOn(commonMain)
             dependencies {
                 implementation(compose.foundation)
             }
         }
-        val macosX64Main by getting {
-            dependsOn(macosMain)
-        }
-        val macosArm64Main by getting {
-            dependsOn(macosMain)
-        }
-        val iosMain by creating {
+        val iosMain by getting {
             dependsOn(commonMain)
             dependencies {
                 implementation(compose.foundation)
             }
-        }
-        val iosX64Main by getting {
-            dependsOn(iosMain)
-        }
-        val iosArm64Main by getting {
-            dependsOn(iosMain)
-        }
-        val iosSimulatorArm64Main by getting {
-            dependsOn(iosMain)
         }
     }
 }

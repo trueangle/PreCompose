@@ -17,20 +17,18 @@ api("moe.tlaster:precompose:$precompose_version")
 
 // api("moe.tlaster:precompose-koin:$precompose_version") // For Koin intergration
 ```
-## Android
-Change the Activity's parent class to `moe.tlaster.precompose.lifecycle.PreComposeActivity` and use `moe.tlaster.precompose.lifecycle.setContent` for setting compose content
 
-## Desktop (JVM)
-Change the `Window` to `moe.tlaster.precompose.PreComposeWindow`
+## Wrap the `App()`
 
-## iOS
-Set the `UIWindow.rootViewController` to `PreComposeApplication`
-
-## Native macOS
-Change the `Window` to `moe.tlaster.precompose.PreComposeWindow`
-
-## Web (Canvas)
-Change the `Window` to `moe.tlaster.precompose.preComposeWindow`
+Wrap your App with `PreComposApp` like this:
+```Kotlin
+@Composable
+fun App() {
+    PreComposeApp {
+        // your app's content goes here
+    }
+}
+```
 
 ## Done!
 That's it! Enjoying the PreCompose! Now you can write all your business logic and ui code in `commonMain`

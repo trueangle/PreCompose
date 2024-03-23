@@ -27,4 +27,8 @@ internal class PreComposeViewModel :
             backDispatcher.onBackPress()
         }
     }
+
+    override fun onCleared() {
+        lifecycleRegistry.updateState(Lifecycle.State.Destroyed)
+    }
 }

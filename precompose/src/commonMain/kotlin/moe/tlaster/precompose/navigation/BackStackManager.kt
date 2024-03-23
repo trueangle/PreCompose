@@ -1,6 +1,9 @@
 package moe.tlaster.precompose.navigation
 
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -16,8 +19,7 @@ import moe.tlaster.precompose.stateholder.StateHolder
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
-
-internal const val STACK_SAVED_STATE_KEY = "BackStackManager"
+import kotlin.math.max
 
 @Stable
 internal class BackStackManager : LifecycleObserver {
@@ -26,10 +28,36 @@ internal class BackStackManager : LifecycleObserver {
 
     // internal for testing
     internal val backStacks = MutableStateFlow(listOf<BackStackEntry>())
-    private val _routeParser = RouteParser()
+    private var _routeParser = RouteParser()
     private val _suspendResult = linkedMapOf<BackStackEntry, Continuation<Any?>>()
+    private var _routeGraph: RouteGraph? = null
+        set(value) {
+            field = value
+            if (value != null) {
+                _routeParser = RouteParser()
+                value.routes
+                    .map { route ->
+                        RouteParser.expandOptionalVariables(route.route).let {
+                            if (route is SceneRoute) {
+                                it + route.deepLinks.flatMap {
+                                    RouteParser.expandOptionalVariables(it)
+                                }
+                            } else {
+                                it
+                            }
+                        } to route
+                    }
+                    .flatMap { it.first.map { route -> route to it.second } }
+                    .forEach {
+                        _routeParser.insert(it.first, it.second)
+                    }
+            }
+        }
     val currentBackStackEntry: Flow<BackStackEntry?>
         get() = backStacks.asSharedFlow().map { it.lastOrNull() }
+
+    val prevBackStackEntry: Flow<BackStackEntry?>
+        get() = backStacks.asSharedFlow().map { it.dropLast(1).lastOrNull() }
 
     val canGoBack: Flow<Boolean>
         get() = backStacks.asSharedFlow().map { it.size > 1 }
@@ -47,48 +75,39 @@ internal class BackStackManager : LifecycleObserver {
     val currentFloatingBackStackEntry: Flow<BackStackEntry?>
         get() = backStacks.asSharedFlow().map { it.lastOrNull { it.route.isFloatingRoute() } }
 
-    // internal for testing
-    internal var canNavigate = true
+    var canNavigate by mutableStateOf(true)
 
     fun init(
-        routeGraph: RouteGraph,
         stateHolder: StateHolder,
         savedStateHolder: SavedStateHolder,
         lifecycleOwner: LifecycleOwner,
-        persistNavState: Boolean,
     ) {
         _stateHolder = stateHolder
         _savedStateHolder = savedStateHolder
         lifecycleOwner.lifecycle.addObserver(this)
+    }
 
-        if (persistNavState) {
-            _savedStateHolder.registerProvider(STACK_SAVED_STATE_KEY) {
-                backStacks.value.map { backStackEntry -> backStackEntry.path }
+    fun setRouteGraph(
+        routeGraph: RouteGraph,
+    ) {
+        if (_routeGraph != routeGraph) {
+            _routeGraph?.let {
+                // clear all backstacks
+                backStacks.value.forEach {
+                    it.destroy()
+                }
+                backStacks.value = emptyList()
+            }
+            _routeGraph = routeGraph
+            // push to initial route
+            push(routeGraph.initialRoute)
+        } else {
+            _routeGraph = routeGraph
+            // update routes
+            backStacks.value.forEach { entry ->
+                entry.routeInternal = _routeParser.find(entry.path)?.route ?: entry.routeInternal
             }
         }
-        routeGraph.routes
-            .map { route ->
-                RouteParser.expandOptionalVariables(route.route).let {
-                    if (route is SceneRoute) {
-                        it + route.deepLinks.flatMap {
-                            RouteParser.expandOptionalVariables(it)
-                        }
-                    } else {
-                        it
-                    }
-                } to route
-            }
-            .flatMap { it.first.map { route -> route to it.second } }
-            .forEach {
-                _routeParser.insert(it.first, it.second)
-            }
-
-        @Suppress("UNCHECKED_CAST")
-        (_savedStateHolder.consumeRestored(STACK_SAVED_STATE_KEY) as? List<String>)?.let { restoredStacks ->
-            restoredStacks.forEach {
-                push(it)
-            }
-        } ?: push(routeGraph.initialRoute)
     }
 
     fun push(path: String, options: NavOptions? = null) {
@@ -106,13 +125,14 @@ internal class BackStackManager : LifecycleObserver {
             options.launchSingleTop &&
             currentBackStacks.any { it.hasRoute(matchResult.route.route, path, options.includePath) }
         ) {
-            currentBackStacks.firstOrNull { it.hasRoute(matchResult.route.route, path, options.includePath) }?.let { entry ->
-                backStacks.value = backStacks.value.filter { it.id != entry.id } + entry
-            }
+            currentBackStacks.firstOrNull { it.hasRoute(matchResult.route.route, path, options.includePath) }
+                ?.let { entry ->
+                    backStacks.value = backStacks.value.filter { it.id != entry.id } + entry
+                }
         } else {
-            backStacks.value = backStacks.value + BackStackEntry(
-                id = backStacks.value.size.toLong(),
-                route = matchResult.route,
+            backStacks.value += BackStackEntry(
+                id = (backStacks.value.lastOrNull()?.id ?: 0L) + 1,
+                routeInternal = matchResult.route,
                 pathMap = matchResult.pathMap,
                 queryString = query.takeIf { it.isNotEmpty() }?.let {
                     QueryString(it)
@@ -120,9 +140,6 @@ internal class BackStackManager : LifecycleObserver {
                 path = path,
                 parentStateHolder = _stateHolder,
                 parentSavedStateHolder = _savedStateHolder,
-                requestNavigationLock = {
-                    canNavigate = !it
-                },
             )
         }
 
@@ -169,6 +186,42 @@ internal class BackStackManager : LifecycleObserver {
         }
     }
 
+    fun popWithOptions(
+        popUpTo: PopUpTo,
+    ) {
+        if (!canNavigate) {
+            return
+        }
+        val currentBackStacks = backStacks.value
+        if (currentBackStacks.size <= 1) {
+            return
+        }
+        val index = when (popUpTo) {
+            PopUpTo.None -> -1
+            PopUpTo.Prev -> currentBackStacks.lastIndex - 1
+            is PopUpTo.Route -> if (popUpTo.route.isNotEmpty()) {
+                currentBackStacks.indexOfLast { it.hasRoute(popUpTo.route, "", false) }
+            } else {
+                0
+            }
+        }.let {
+            if (popUpTo.inclusive) it else it + 1
+        }.let {
+            max(it, 0)
+        }
+        if (index != -1) {
+            val stacksToDrop = currentBackStacks.subList(
+                index,
+                currentBackStacks.size,
+            )
+            backStacks.value -= stacksToDrop
+            stacksToDrop.forEach {
+                _suspendResult.remove(it)?.resume(null)
+                it.destroy()
+            }
+        }
+    }
+
     suspend fun pushForResult(path: String, options: NavOptions? = null): Any? {
         return suspendCoroutine { continuation ->
             push(path, options)
@@ -183,10 +236,12 @@ internal class BackStackManager : LifecycleObserver {
                 val currentEntry = backStacks.value.lastOrNull()
                 currentEntry?.active()
             }
+
             Lifecycle.State.InActive -> {
                 val currentEntry = backStacks.value.lastOrNull()
                 currentEntry?.inActive()
             }
+
             Lifecycle.State.Destroyed -> {
                 backStacks.value.forEach {
                     it.destroy()
