@@ -3,12 +3,12 @@ package moe.tlaster.precompose.navigation
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.core.ExperimentalTransitionApi
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.animation.core.rememberTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.updateTransition
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.AnchoredDraggableState
 import androidx.compose.foundation.gestures.DraggableAnchors
@@ -23,23 +23,26 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.SaveableStateHolder
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.CancellationException
 import moe.tlaster.precompose.lifecycle.LocalLifecycleOwner
 import moe.tlaster.precompose.lifecycle.currentLocalLifecycleOwner
 import moe.tlaster.precompose.navigation.route.ComposeRoute
+import moe.tlaster.precompose.navigation.route.FloatingRoute
 import moe.tlaster.precompose.navigation.route.GroupRoute
 import moe.tlaster.precompose.navigation.transition.NavTransition
 import moe.tlaster.precompose.stateholder.LocalSavedStateHolder
@@ -65,6 +68,7 @@ import moe.tlaster.precompose.stateholder.currentLocalStateHolder
 @OptIn(
     ExperimentalTransitionApi::class,
     ExperimentalFoundationApi::class,
+    ExperimentalAnimationApi::class,
 )
 @Composable
 fun NavHost(
@@ -115,12 +119,28 @@ fun NavHost(
             .currentSceneBackStackEntry.collectAsState(null)
         val prevSceneEntry by navigator.stackManager
             .prevSceneBackStackEntry.collectAsState(null)
-        BackHandler(canGoBack) {
-            navigator.goBack()
+        var progress by remember { mutableFloatStateOf(0f) }
+        var inPredictiveBack by remember { mutableStateOf(false) }
+        PredictiveBackHandler(canGoBack) { backEvent ->
+            inPredictiveBack = true
+            progress = 0f
+            try {
+                backEvent.collect {
+                    progress = it
+                }
+                if (progress != 1f) {
+                    // play the animation to the end
+                    progress = 1f
+                }
+                // inPredictiveBack = false
+                // navigator.goBack()
+            } catch (e: CancellationException) {
+                inPredictiveBack = false
+            }
         }
         currentSceneEntry?.let { sceneEntry ->
             val actualSwipeProperties = sceneEntry.swipeProperties ?: swipeProperties
-            val state = if (actualSwipeProperties != null) {
+            val state = if (actualSwipeProperties != null && !inPredictiveBack) {
                 val density = LocalDensity.current
                 val width = constraints.maxWidth.toFloat()
                 val state = remember {
@@ -140,7 +160,6 @@ fun NavHost(
                     state.currentValue,
                     state.isAnimationRunning,
                 ) {
-                    navigator.stackManager.canNavigate = !state.isAnimationRunning
                     if (state.currentValue == DragAnchors.End && !state.isAnimationRunning) {
                         navigator.goBack()
                         state.snapTo(DragAnchors.Start)
@@ -150,50 +169,76 @@ fun NavHost(
             } else {
                 null
             }
-            val showPrev by remember(state) {
+            val showPrev by remember(state, inPredictiveBack, progress, prevSceneEntry, currentEntry) {
                 derivedStateOf {
-                    if (state == null) {
+                    if (state == null && !inPredictiveBack && prevSceneEntry == null || currentEntry?.route is FloatingRoute) {
                         false
                     } else {
-                        state.offset > 0f
+                        (state != null && state.offset > 0f) || progress > 0f
                     }
                 }
             }
-            val transition = if (showPrev && prevSceneEntry != null && state != null) {
+            val transition = if (showPrev && inPredictiveBack) {
+                val transitionState by remember(sceneEntry) {
+                    mutableStateOf(SeekableTransitionState(sceneEntry, prevSceneEntry!!))
+                }
+                LaunchedEffect(progress) {
+                    if (progress == 1f && inPredictiveBack) {
+                        // play the animation to the end
+                        transitionState.animateToTargetState()
+                        inPredictiveBack = false
+                        navigator.goBack()
+                        progress = 0f
+                    } else {
+                        transitionState.snapToFraction(progress)
+                    }
+                }
+                rememberTransition(transitionState, label = "entry")
+            } else if (showPrev && state != null) {
                 val transitionState by remember(sceneEntry) {
                     mutableStateOf(SeekableTransitionState(sceneEntry, prevSceneEntry!!))
                 }
                 LaunchedEffect(state.progress) {
-                    transitionState.snapToFraction(state.progress)
+                    if (state.progress == 1f && state.currentValue != DragAnchors.End) {
+                        // reset the state to the initial value
+                        transitionState.animateToCurrentState()
+                    } else {
+                        transitionState.snapToFraction(state.progress)
+                    }
                 }
                 rememberTransition(transitionState, label = "entry")
             } else {
                 updateTransition(sceneEntry, label = "entry")
-            }
-            SideEffect {
-                navigator.stackManager.canNavigate = !transition.isRunning
             }
             val transitionSpec: AnimatedContentTransitionScope<BackStackEntry>.() -> ContentTransform = {
                 val actualTransaction = run {
                     if (navigator.stackManager.contains(initialState) && !showPrev) targetState else initialState
                 }.navTransition ?: navTransition
                 if (!navigator.stackManager.contains(initialState) || showPrev) {
-                    actualTransaction.resumeTransition.togetherWith(actualTransaction.destroyTransition)
-                        .apply {
-                            targetContentZIndex = actualTransaction.enterTargetContentZIndex
-                        }
+                    ContentTransform(
+                        targetContentEnter = actualTransaction.resumeTransition,
+                        initialContentExit = actualTransaction.destroyTransition,
+                        targetContentZIndex = actualTransaction.enterTargetContentZIndex,
+                        // sizeTransform will cause the content to be resized
+                        // when the transition is running with swipe back
+                        // I have no idea why
+                        // And it cost me weeks to figure it out :(
+                        sizeTransform = null,
+                    )
                 } else {
-                    actualTransaction.createTransition.togetherWith(actualTransaction.pauseTransition)
-                        .apply {
-                            targetContentZIndex = actualTransaction.exitTargetContentZIndex
-                        }
+                    ContentTransform(
+                        targetContentEnter = actualTransaction.createTransition,
+                        initialContentExit = actualTransaction.pauseTransition,
+                        targetContentZIndex = actualTransaction.exitTargetContentZIndex,
+                        sizeTransform = null,
+                    )
                 }
             }
             transition.AnimatedContent(
                 transitionSpec = transitionSpec,
                 contentKey = { it.stateId },
-            ) {
-                NavHostContent(composeStateHolder, it)
+            ) { entry ->
+                NavHostContent(composeStateHolder, entry)
             }
             if (state != null) {
                 DragSlider(
@@ -205,7 +250,10 @@ fun NavHost(
         val currentFloatingEntry by navigator.stackManager
             .currentFloatingBackStackEntry.collectAsState(null)
         currentFloatingEntry?.let {
-            AnimatedContent(it) { entry ->
+            AnimatedContent(
+                it,
+                contentKey = { it.stateId },
+            ) { entry ->
                 NavHostContent(composeStateHolder, entry)
             }
         }
