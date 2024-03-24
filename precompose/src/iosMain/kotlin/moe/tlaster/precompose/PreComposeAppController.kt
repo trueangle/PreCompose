@@ -6,7 +6,6 @@ import androidx.compose.ui.window.ComposeUIViewController
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.ExportObjCClass
 import kotlinx.cinterop.ObjCAction
-import moe.tlaster.precompose.lifecycle.Lifecycle
 import platform.Foundation.NSLog
 import platform.Foundation.NSUserActivity
 import platform.UIKit.UIGestureRecognizerStateEnded
@@ -28,7 +27,7 @@ private const val PRECOMPOSE_ACTIVITY_TYPE = "moe.tlaster.precompose.state.activ
 class PreComposeAppController(
     private val configure: ComposeUIViewControllerConfiguration.() -> Unit = {},
     nsUserActivity: NSUserActivity? = null,
-    private val content: @Composable () -> Unit
+    private val content: @Composable () -> Unit,
 ) : UIViewController(null, null) {
     private val windowHolder: PreComposeWindowHolder
     private var _isRestoredFromState = false
@@ -54,7 +53,7 @@ class PreComposeAppController(
         super.viewDidLoad()
         val leftSwipeRecognizer = UIScreenEdgePanGestureRecognizer(
             target = this,
-            action = sel_registerName("${::handleEdgePanGesture.name}:")
+            action = sel_registerName("${::handleEdgePanGesture.name}:"),
         ).apply {
             edges = UIRectEdgeLeft
         }

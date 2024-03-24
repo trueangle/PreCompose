@@ -19,10 +19,10 @@ import moe.tlaster.precompose.stateholder.StateHolder
 import moe.tlaster.precompose.ui.BackDispatcher
 import moe.tlaster.precompose.ui.BackDispatcherOwner
 import moe.tlaster.precompose.ui.LocalBackDispatcherOwner
-import platform.Foundation.NSUserActivity
 import platform.Foundation.NSNotification
 import platform.Foundation.NSNotificationCenter
 import platform.Foundation.NSSelectorFromString
+import platform.Foundation.NSUserActivity
 import platform.UIKit.UIApplicationDidEnterBackgroundNotification
 import platform.UIKit.UIApplicationWillEnterForegroundNotification
 import platform.UIKit.UIApplicationWillTerminateNotification
@@ -109,7 +109,7 @@ private class AppStateHolder(
 }
 
 class PreComposeWindowHolder(
-    restored: Map<String, List<Any?>>? = null
+    restored: Map<String, List<Any?>>? = null,
 ) : LifecycleOwner, BackDispatcherOwner {
     override val lifecycle by lazy {
         LifecycleRegistry()
